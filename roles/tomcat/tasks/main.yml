@@ -1,0 +1,51 @@
+---
+- name: add group "tomcat"
+  group: name=tomcat
+
+- name: add user "tomcat"
+  user: name=tomcat group=tomcat home=/usr/share/tomcat createhome=no
+  become: True
+  become_method: sudo
+
+- name: Download Tomcat
+  get_url: url=http://apache.javapipe.com/tomcat/tomcat-8/v8.0.48/bin/apache-tomcat-8.0.48.tar.gz dest=/opt/apache-tomcat-8.0.48.tar.gz
+
+- name: Extract archive
+  command: chdir=/usr/share /bin/tar xvf /opt/apache-tomcat-8.0.48.tar.gz -C /opt/ creates=/opt/apache-tomcat-8.0.48
+
+- name: Change ownership of Tomcat installation
+  file: path=/opt/apache-tomcat-8.0.48 owner=tomcat group=tomcat state=directory recurse=yes
+
+- name: Configure Tomcat users
+  template: src=tomcat-users.xml dest=/opt/apache-tomcat-8.0.48/conf/
+  notify: restart tomcat
+  when: ansible_os_family == "RedHat"
+
+- name: Create tomcat-users.xml for Ubuntu
+  template:
+    src: templates/tomcat_users_ubuntu.xml
+    dest: /opt/apache-tomcat-8.0.48/conf/
+  notify: restart tomcat
+  when: ansible_os_family == "Debian"
+
+- name: Create systemd service script for Tomcat CentOs
+  template:
+    src: "templates/tomcat.service.centos"
+    dest: "/etc/systemd/system/tomcat.service"
+  when: ansible_os_family == "RedHat"
+
+- name: Create systemd service script for Tomcat Ubuntu
+  template:
+    src: "templates/tomcat.service.ubuntu"
+    dest: "/etc/systemd/system/tomcat.service"
+  when: ansible_os_family == "Debian"
+
+- name: Reload daemon
+  command: systemctl daemon-reload
+  notify: restart tomcat
+
+- name: Start and enable Tomcat service
+  systemd:
+    name: tomcat
+    state: started
+    enabled: true
